@@ -18,10 +18,9 @@ class DCGAN:
         self.input_nc = opt.input_nc
         self.batch_size = opt.batchSize
         self.symG, self.symD, _ = make_dcgan_sym(self.ngf, self.ndf, self.input_nc)
-        self.ctx = mx.gpu(opt.gpu_ids)
+        self.ctx = mx.gpu(opt.gpu_ids[0])
         self.lr = opt.lr
         self.beta1 = opt.beta1
-
 
     def bind(self, rand_iter, train_iter):
         # bind symbol to module
