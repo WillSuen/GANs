@@ -94,6 +94,8 @@ class DCGAN:
             for t, batch in enumerate(train_iter):
                 rbatch = rand_iter.next()
                 self.update(rbatch, batch)
+                if t % self.opt.print_freq == 0:
+                    print('epoch: %s, iter: %s' % (epoch, t))
             visual(os.path.join(self.opt.outputs_dir, 'out'+str(epoch)+'.jpg'), self.generate(rbatch)[0].asnumpy)
 
 
