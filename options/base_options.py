@@ -86,7 +86,8 @@ class BaseOptions():
 
         # save to the disk
         expr_dir = os.path.join(self.opt.outputs_dir, self.opt.name)
-        os.makedirs(expr_dir)
+        if not os.path.exists(expr_dir):
+            os.makedirs(expr_dir)
         file_name = os.path.join(expr_dir, 'opt.txt')
         with open(file_name, 'wt') as opt_file:
             opt_file.write('------------ Options -------------\n')
