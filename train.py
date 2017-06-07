@@ -27,5 +27,5 @@ elif opt.dataset == 'imagenet':
     train_iter = data_iter.ImagenetIter(opt.dataroot, opt.batchSize, (opt.input_nc, opt.fineSize, opt.fineSize))
 
 visual = visualizer.visual
-rand_iter = data_iter.RandIter(opt.Z)
+rand_iter = data_iter.RandIter(opt.Z, 1)
 model.fit(rand_iter, train_iter, visual)
