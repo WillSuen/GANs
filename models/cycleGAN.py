@@ -7,7 +7,7 @@ import os
 from util.visualizer import *
 
 
-def make_symG(data, ngf=64, use_dropout=False, n_blocks=9, no_bias=False, fix_gamma=True, eps=1e-5 + 1e-12):
+def make_symG(data, ngf=64, use_dropout=False, n_blocks=9, no_bias=False, fix_gamma=False, eps=1e-5 + 1e-12):
     
     BatchNorm = mx.sym.BatchNorm
     
@@ -43,35 +43,35 @@ def make_symG(data, ngf=64, use_dropout=False, n_blocks=9, no_bias=False, fix_ga
     dbn2 = BatchNorm(d2, name='dbn2', fix_gamma=fix_gamma, eps=eps)
     dact2 = mx.sym.Activation(dbn2, name='dact2', act_type='relu')
     
-    c4 = mx.sym.Convolution(dact2, name='c4', kernel=(7, 7), pad=(3, 3), stride=(1, 1), num_filter=3, no_bias=no_bias)
-    gout = mx.sym.Activation(c4, name='gout', act_type='tanh')
+    c3 = mx.sym.Convolution(dact2, name='c4', kernel=(7, 7), pad=(3, 3), stride=(1, 1), num_filter=3, no_bias=no_bias)
+    gout = mx.sym.Activation(c3, name='gout', act_type='tanh')
     
     return gout
     
     
-def make_symD(data, label, ndf=64, no_bias=False, fix_gamma=True, eps=1e-5 + 1e-12):
+def make_symD(data, label, ndf=64, no_bias=False, fix_gamma=False, eps=1e-5 + 1e-12):
     BatchNorm = mx.sym.BatchNorm
     d1 = mx.sym.Convolution(data, name='d1', kernel=(4, 4), stride=(
-        2, 2), pad=(2, 2), num_filter=ndf, no_bias=no_bias)
+        2, 2), pad=(1, 1), num_filter=ndf, no_bias=no_bias)
     dact1 = mx.sym.LeakyReLU(d1, name='dact1', act_type='leaky', slope=0.2)
 
     d2 = mx.sym.Convolution(dact1, name='d2', kernel=(4, 4), stride=(
-        2, 2), pad=(2, 2), num_filter=ndf * 2, no_bias=no_bias)
+        2, 2), pad=(1, 1), num_filter=ndf * 2, no_bias=no_bias)
     dbn2 = BatchNorm(d2, name='dbn2', fix_gamma=fix_gamma, eps=eps)
     dact2 = mx.sym.LeakyReLU(dbn2, name='dact2', act_type='leaky', slope=0.2)
 
     d3 = mx.sym.Convolution(dact2, name='d3', kernel=(4, 4), stride=(
-        2, 2), pad=(2, 2), num_filter=ndf * 4, no_bias=no_bias)
+        2, 2), pad=(1, 1), num_filter=ndf * 4, no_bias=no_bias)
     dbn3 = BatchNorm(d3, name='dbn3', fix_gamma=fix_gamma, eps=eps)
     dact3 = mx.sym.LeakyReLU(dbn3, name='dact3', act_type='leaky', slope=0.2)
 
     d4 = mx.sym.Convolution(dact3, name='d4', kernel=(4, 4), stride=(
-        1, 1), pad=(2, 2), num_filter=ndf * 8, no_bias=no_bias)
+        1, 1), pad=(1, 1), num_filter=ndf * 8, no_bias=no_bias)
     dbn4 = BatchNorm(d4, name='dbn4', fix_gamma=fix_gamma, eps=eps)
     dact4 = mx.sym.LeakyReLU(dbn4, name='dact4', act_type='leaky', slope=0.2)
 
     d5 = mx.sym.Convolution(dact4, name='d5', kernel=(
-        4, 4), pad=(2, 2), num_filter=1, no_bias=no_bias)
+        4, 4), pad=(1, 1), num_filter=1, no_bias=no_bias)
 
     mseloss_ = mx.sym.mean(mx.sym.square(d5 - label))
     mseloss = mx.sym.MakeLoss(data=mseloss_, name='mean_square_loss')
@@ -193,16 +193,18 @@ def train_generator(inputA, inputB, lamd):
     # update Generator A and Generator B
     for gradsr, gradsf in zip(modG_A._exec_group.grad_arrays, gradG_A):
         for gradr, gradf in zip(gradsr, gradsf):
-            # gradr += gradf
-            gradf += gradr
+            gradr += gradf
+            # gradf += gradr
     # modG_A.update()
 
     for gradsr, gradsf in zip(modG_B._exec_group.grad_arrays, gradG_B):
         for gradr, gradf in zip(gradsr, gradsf):
-            # gradr += gradf
-            gradf += gradr
+            gradr += gradf
+            # gradf += gradr
     # modG_B.update()
     
+    gradG_A = [[grad.copyto(grad.context) for grad in grads] for grads in modG_A._exec_group.grad_arrays]
+    gradG_B = [[grad.copyto(grad.context) for grad in grads] for grads in modG_B._exec_group.grad_arrays]
     return cyclossA, cyclossB, gradG_A, gradG_B
 
 
@@ -224,10 +226,10 @@ def train_discriminator(modD, real, fake):
     loss += modD.get_outputs()[0].asnumpy()[0]
     for gradsr, gradsf in zip(modD._exec_group.grad_arrays, gradD):
         for gradr, gradf in zip(gradsr, gradsf):
-            # gradr += gradf
-            gradf += gradr
-            gradf *= 0.5
-    # modD.update()
+            gradr += gradf
+            # gradf += gradr
+            # gradf *= 0.5
+    modD.update()
     return loss/2, gradD
 
 def update_module(mod, grad):
@@ -247,7 +249,7 @@ ctx = mx.gpu(0)
 check_point = False
 load_model = False
 mode_path = './SavedModel'
-label = mx.nd.zeros((batch_size, 1, 35, 35), ctx=ctx)
+label = mx.nd.zeros((batch_size, 1, 30, 30), ctx=ctx)
 
 
 symG_A, symG_B, symD_A, symD_B = make_cycleGAN(ngf, ndf)
@@ -284,7 +286,7 @@ modG_B.init_optimizer(
 modD_A = mx.mod.Module(symbol=symD_A, data_names=(
     'dataC',), label_names=('labelC',), context=ctx)
 modD_A.bind(data_shapes=[('dataC', (batch_size, 3, 256, 256))], 
-            label_shapes=[('labelC', (batch_size, 1, 35, 35))],
+            label_shapes=[('labelC', (batch_size, 1, 30, 30))],
             inputs_need_grad=True)
 modD_A.init_params(initializer=mx.init.Normal(0.02))
 modD_A.init_optimizer(
@@ -299,7 +301,7 @@ modD_A.init_optimizer(
 modD_B = mx.mod.Module(symbol=symD_B, data_names=(
     'dataD',), label_names=('labelD',), context=ctx)
 modD_B.bind(data_shapes=[('dataD', (batch_size, 3, 256, 256))], 
-            label_shapes=[('labelD', (batch_size, 1, 35, 35))],
+            label_shapes=[('labelD', (batch_size, 1, 30, 30))],
             inputs_need_grad=True)
 modD_B.init_params(initializer=mx.init.Normal(0.02))
 modD_B.init_optimizer(
@@ -385,8 +387,8 @@ for i in range(200):
         # update modG and modD
         update_module(modG_A, gradG_A)
         update_module(modG_B, gradG_B)
-        update_module(modD_A, gradD_A)
-        update_module(modD_B, gradD_B)
+        # update_module(modD_A, gradD_A)
+        # update_module(modD_B, gradD_B)
         if j % 200 == 0:
             print 'epoch:', str(i), str(j), 'lossD_A:', lossD_A, 'lossD_B:', lossD_B, 'l1loss_a:', l1lossA,'l1loss_b:', l1lossB
 
