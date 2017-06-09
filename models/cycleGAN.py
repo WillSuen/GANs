@@ -7,7 +7,7 @@ import os
 from util.visualizer import *
 
 
-def make_symG(data, ngf=64, use_dropout=False, n_blocks=9, no_bias=False, fix_gamma=False, eps=1e-5 + 1e-12):
+def make_symG(data, ngf=64, use_dropout=False, n_blocks=9, no_bias=False, fix_gamma=True, eps=1e-5 + 1e-12):
     
     BatchNorm = mx.sym.BatchNorm
     
@@ -49,7 +49,7 @@ def make_symG(data, ngf=64, use_dropout=False, n_blocks=9, no_bias=False, fix_ga
     return gout
     
     
-def make_symD(data, label, ndf=64, no_bias=False, fix_gamma=False, eps=1e-5 + 1e-12):
+def make_symD(data, label, ndf=64, no_bias=False, fix_gamma=True, eps=1e-5 + 1e-12):
     BatchNorm = mx.sym.BatchNorm
     d1 = mx.sym.Convolution(data, name='d1', kernel=(4, 4), stride=(
         2, 2), pad=(2, 2), num_filter=ndf, no_bias=no_bias)
@@ -123,7 +123,7 @@ class ImagenetIter(mx.io.DataIter):
         return [data]
 
 
-def get_l1grad(cycle, real, lamb=10, sigma=1000):
+def get_l1grad(cycle, real, lamb=1, sigma=1000):
     l1_g = (cycle.asnumpy() - real.asnumpy())
     l1_loss = np.mean(np.abs(l1_g))
     l1_g = l1_g * sigma * sigma
@@ -133,15 +133,29 @@ def get_l1grad(cycle, real, lamb=10, sigma=1000):
     return l1_loss, grad
 
 
-def update_generator(inputA, inputB):
+def getAbsLoss():
+    data = mx.sym.Variable('data')
+    cycle = mx.sym.Variable('cycle')
+    diff = cycle - data
+    abs_ = mx.sym.abs(diff)
+    loss = mx.sym.mean(abs_)
+    Absloss = mx.sym.MakeLoss(data=loss, name='AbsLoss')
+    return Absloss
+
+
+def train_generator(inputA, inputB, lamd):
     # calculate loss for inputA
     modG_A.forward(mx.io.DataBatch(data=inputA, label=None), is_train=True)
     fakeB = modG_A.get_outputs()
     modG_B.forward(mx.io.DataBatch(data=fakeB, label=None), is_train=True)
     cycleA = modG_B.get_outputs()
-
+    
     # backward for cycle L1 loss for inputA and cycleA
-    l1lossA, grad = get_l1grad(cycleA[0], inputA[0])
+    # l1lossA, grad = get_l1grad(cycleA[0], inputA[0])
+    cycleLoss_excu.forward(cycle = cycleA[0], data = inputA[0], is_train=True)
+    cycleLoss_excu.backward()
+    cyclossA = cycleLoss_excu.outputs[0].asnumpy()
+    grad = lamd * cycleLoss_excu.grad_dict['cycle']
     modG_B.backward([grad])
 
     # backward for GAN loss
@@ -162,7 +176,11 @@ def update_generator(inputA, inputB):
     cycleB = modG_A.get_outputs()
 
     # backward for cycle L1 loss for inputB and cycleB
-    l1lossB, grad = get_l1grad(cycleB[0], inputB[0])
+    # l1lossB, grad = get_l1grad(cycleB[0], inputB[0])
+    cycleLoss_excu.forward(cycle = cycleB[0], data = inputB[0], is_train=True)
+    cycleLoss_excu.backward()
+    cyclossB = cycleLoss_excu.outputs[0].asnumpy()
+    grad = lamd * cycleLoss_excu.grad_dict['cycle']
     modG_A.backward([grad])
 
     # backward for GAN loss
@@ -175,18 +193,20 @@ def update_generator(inputA, inputB):
     # update Generator A and Generator B
     for gradsr, gradsf in zip(modG_A._exec_group.grad_arrays, gradG_A):
         for gradr, gradf in zip(gradsr, gradsf):
-            gradr += gradf
-    modG_A.update()
+            # gradr += gradf
+            gradf += gradr
+    # modG_A.update()
 
     for gradsr, gradsf in zip(modG_B._exec_group.grad_arrays, gradG_B):
         for gradr, gradf in zip(gradsr, gradsf):
-            gradr += gradf
-    modG_B.update()
+            # gradr += gradf
+            gradf += gradr
+    # modG_B.update()
     
-    return l1lossA, l1lossB
+    return cyclossA, cyclossB, gradG_A, gradG_B
 
 
-def update_discriminator(modD, real, fake):
+def train_discriminator(modD, real, fake):
     # train with real data
     label[:] = 1
     modD.forward(mx.io.DataBatch(data=real, label=[label]), is_train=True)
@@ -204,11 +224,18 @@ def update_discriminator(modD, real, fake):
     loss += modD.get_outputs()[0].asnumpy()[0]
     for gradsr, gradsf in zip(modD._exec_group.grad_arrays, gradD):
         for gradr, gradf in zip(gradsr, gradsf):
-            gradr += gradf
-            gradr *= 0.5
-    modD.update()
-    return loss
-    
+            # gradr += gradf
+            gradf += gradr
+            gradf *= 0.5
+    # modD.update()
+    return loss/2, gradD
+
+def update_module(mod, grad):
+    for gradsr, gradsf in zip(mod._exec_group.grad_arrays, grad):
+        for gradr, gradf in zip(gradsr, gradsf):
+            gradr = gradf     
+    mod.update()
+
 # start program   
 ndf = 64
 ngf = 64
@@ -283,6 +310,9 @@ modD_B.init_optimizer(
         'beta1': beta1,
     })
 
+cycleLoss = getAbsLoss()
+cycleLoss_excu = cycleLoss.simple_bind(ctx=ctx,  grad_rep='write', cycle=(batch_size, 3, 256, 256), data=(batch_size, 3, 256, 256))
+
 # load params
 if load_model:
     modG_A.load_params(os.path.join(mode_path, 'generatorA'))
@@ -303,12 +333,13 @@ testB = glob.glob(os.path.join(data_root, 'testB/*.jpg'))
 testA_iter = ImagenetIter(testA, batch_size, (3, 256, 256))
 testB_iter = ImagenetIter(testB, batch_size, (3, 256, 256))
 
-dirname = './outputs/maps_new'
+dirname = './outputs/maps_new_'
 if not os.path.exists(dirname):
     os.makedirs(dirname)
 
 test = 0
-for i in range(100):
+for i in range(200):
+    # save current results
     if test == 200:
         testA_iter.reset()
         testB_iter.reset()
@@ -343,21 +374,21 @@ for i in range(100):
     for j in range(1000):
         inputA = dataA_iter.getdata()
         inputB = dataB_iter.getdata()
-        l1lossA, l1lossB = update_generator(inputA, inputB)
+        l1lossA, l1lossB, gradG_A, gradG_B = train_generator(inputA, inputB, 10)
         modG_A.forward(mx.io.DataBatch(data=inputA, label=None), is_train=True)
         fakeB = modG_A.get_outputs()
         modG_B.forward(mx.io.DataBatch(data=inputB, label=None), is_train=True)
         fakeA = modG_B.get_outputs()
-        lossD_A = update_discriminator(modD_A, inputA, fakeA)
-        lossD_B = update_discriminator(modD_B, inputB, fakeB)
+        lossD_A, gradD_A = train_discriminator(modD_A, inputA, fakeA)
+        lossD_B, gradD_B = train_discriminator(modD_B, inputB, fakeB)
+        
+        # update modG and modD
+        update_module(modG_A, gradG_A)
+        update_module(modG_B, gradG_B)
+        update_module(modD_A, gradD_A)
+        update_module(modD_B, gradD_B)
         if j % 200 == 0:
-            print 'epoch: ' + str(i) + '_' + str(j) + ' lossD_A: ' + str(lossD_A) + ' lossD_B: ' + str(lossD_B) + ' l1loss_a:' + str(l1lossA) + ' l1loss_b:' + str(l1lossB)
-            # visual(os.path.join(dirname, 'fakeA'+str(i)+'_'+str(j/100)+'.jpg'), fakeA[0].asnumpy())
-            # visual(os.path.join(dirname, 'fakeB'+str(i)+'_'+str(j/100)+'.jpg'), fakeB[0].asnumpy())
-            # modG_A.forward(mx.io.DataBatch(data=testA, label=None), is_train=True)
-            # modG_B.forward(mx.io.DataBatch(data=testB, label=None), is_train=True)
-            # visual(os.path.join(dirname, 'testB'+str(i)+'_'+str(j/100)+'.jpg'), modG_A.get_outputs()[0].asnumpy())
-            # visual(os.path.join(dirname, 'testA'+str(i)+'_'+str(j/100)+'.jpg'), modG_B.get_outputs()[0].asnumpy())
+            print 'epoch:', str(i), str(j), 'lossD_A:', lossD_A, 'lossD_B:', lossD_B, 'l1loss_a:', l1lossA,'l1loss_b:', l1lossB
 
     if i % 10 == 0:
         modG_A.save_params(os.path.join(mode_path, 'generatorA'))
