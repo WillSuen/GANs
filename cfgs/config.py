@@ -20,6 +20,7 @@ cfg.network.ngf = 64
 cfg.network.ndf = 64
 cfg.network.dropout = False
 cfg.network.n_blocks = 9
+cfg.network.wclip=0.1
 
 
 # Train

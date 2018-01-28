@@ -6,13 +6,14 @@ kv_store: 'device'
 memonger: False
 retrain: False
 model_path: './model/'
-out_path: './outputs/WGAN/'
+out_path: './outputs/infoGAN/'
 model_load_epoch: 0
 num_epoch: 100
 network:
   ngf: 64
   ndf: 64
   dropout: False
+  wclip: 0.01
 
 
 train:

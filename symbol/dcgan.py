@@ -1,9 +1,5 @@
-from __future__ import print_function
 import mxnet as mx
-import numpy as np
-import logging
-from datetime import datetime
-import os
+
 
 
 class DCGAN:
@@ -184,8 +180,11 @@ class WGAN:
             visual(os.path.join(self.opt.outputs_dir, 'out'+str(epoch)+'.jpg'), self.generate(rbatch)[0].asnumpy)
 
 
-def make_dcgan_sym(ngf, ndf, nc, no_bias=True, fix_gamma=True, eps=1e-5 + 1e-12):
+def get_symbol(cfg, no_bias=True, fix_gamma=True, eps=1e-5 + 1e-12):
     # This function is modified from mxnet example
+    ngf = cfg.network.ngf
+    ndf = cfg.network.ndf
+    nc = cfg.dataset.c
     BatchNorm = mx.sym.BatchNorm
     rand = mx.sym.Variable('rand')
 
@@ -230,4 +229,4 @@ def make_dcgan_sym(ngf, ndf, nc, no_bias=True, fix_gamma=True, eps=1e-5 + 1e-12)
     d5 = mx.sym.Flatten(d5)
 
     dloss = mx.sym.LogisticRegressionOutput(data=d5, label=label, name='dloss')
-    return gout, dloss, d5
+    return gout, dloss
