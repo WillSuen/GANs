@@ -6,11 +6,11 @@
 
 # output files
 *out
-./model/outputs/
+/models/outputs/*
 
 # saved model
-./model/SavedModel/*
+/models/SavedModel/*
 
 #
 cycleGAN_*
-CycleGAN_
+CycleGAN_*

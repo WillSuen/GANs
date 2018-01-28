@@ -362,7 +362,7 @@ if load_model:
     modD_B.load_params(os.path.join(mode_path, 'discriminatorB'))
 
 # load train data to iterator
-data_root = '/data/guest_users/weisun/datasets/maps/'
+data_root = '/home/wsun12/src/datasets/horse2zebra/'
 dataA = glob.glob(os.path.join(data_root, 'trainA/*.jpg'))
 dataB = glob.glob(os.path.join(data_root, 'trainB/*.jpg'))
 dataA_iter = ImagenetIter(dataA, batch_size, (3, 256, 256))
@@ -374,14 +374,14 @@ testB = glob.glob(os.path.join(data_root, 'testB/*.jpg'))
 testA_iter = ImagenetIter(testA, batch_size, (3, 256, 256))
 testB_iter = ImagenetIter(testB, batch_size, (3, 256, 256))
 
-dirname = './outputs/maps/'
+dirname = './outputs/horse2zebra/'
 if not os.path.exists(dirname):
     os.makedirs(dirname)
 
 test = 0
 for i in range(200):
     # save current results
-    if test == 81:
+    if test == 30:
         testA_iter.reset()
         testB_iter.reset()
         test = 0
@@ -412,7 +412,7 @@ for i in range(200):
 
     dataA_iter.reset()
     dataB_iter.reset()
-    for j in range(550):
+    for j in range(1000):
         inputA = dataA_iter.getdata()
         inputB = dataB_iter.getdata()
         l1lossA, l1lossB, gradG_A, gradG_B, DlossA, DlossB = train_generator(inputA, inputB, 10)
