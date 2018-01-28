@@ -1,0 +1,16 @@
+# jupyter notebook files
+*ipynb*
+
+# pyc files
+*pyc
+
+# output files
+*out
+./model/outputs/
+
+# saved model
+./model/SavedModel/*
+
+#
+cycleGAN_*
+CycleGAN_
