@@ -22,7 +22,6 @@ cfg.network.dropout = False
 cfg.network.n_blocks = 9
 
 
-
 # Train
 cfg.train = edict()
 cfg.train.lr = 0.0002
@@ -32,6 +31,9 @@ cfg.train.wd = 0.0
 
 # dataset
 cfg.dataset = edict()
+cfg.dataset.data_type = ''
+cfg.dataset.n_rand = 100
+cfg.dataset.n_class = 10
 cfg.dataset.path = './'
 cfg.dataset.h = 256
 cfg.dataset.w = 256
