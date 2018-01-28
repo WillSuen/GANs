@@ -4,12 +4,16 @@
 # pyc files
 *pyc
 
+# mxnet
+/mxnet/*
+
 # output files
 *out
-/models/outputs/*
+/symbol/outputs/*
+/outputs/*
 
 # saved model
-/models/SavedModel/*
+/symbol/SavedModel/*
 
 #
 cycleGAN_*

@@ -1,0 +1,34 @@
+---
+gpus: '0'
+batch_size: 1
+frequent: 50
+kv_store: 'device'
+memonger: False
+retrain: False
+model_path: './model/'
+out_path: './outputs/horse2zebra/'
+model_load_epoch: 0
+num_epoch: 100
+network:
+  ngf: 64
+  ndf: 64
+  dropout: False
+  n_blocks: 9
+
+train:
+  lr: 0.0001
+  beta1: 0.5
+  wd: 0.0
+  
+
+dataset:
+  path: '/home/wsun12/src/datasets/horse2zebra/'
+  num_pics: 1000
+  num_test: 100 
+  h: 256
+  w: 256
+  c: 3
+  dw: 30
+  dh: 30
+  
+
